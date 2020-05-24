@@ -4,6 +4,7 @@ labels
 unsorted
 weights/*.74
 custom/labels/.
+custom/samples/.
 
 .DS_Store
 build

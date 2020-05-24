@@ -6,7 +6,6 @@ import time
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import NullLocator
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
@@ -42,6 +41,8 @@ if __name__ == "__main__":
     else:
         # Load checkpoint weights
         model.load_state_dict(torch.load(opt.weights_path))
+
+    torch.save(model, f'{opt.weights_path}.pt')
 
     model.eval()  # Set in evaluation mode
 
@@ -126,8 +127,8 @@ if __name__ == "__main__":
 
         # Save generated image with detections
         plt.axis("off")
-        plt.gca().xaxis.set_major_locator(NullLocator())
-        plt.gca().yaxis.set_major_locator(NullLocator())
+        # plt.gca().xaxis.set_major_locator(NullLocator())
+        # plt.gca().yaxis.set_major_locator(NullLocator())
         filename = path.split("/")[-1].split(".")[0]
         plt.savefig(f"output/{filename}.png", bbox_inches="tight", pad_inches=0.0)
         plt.close()

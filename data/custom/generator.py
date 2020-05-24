@@ -188,9 +188,9 @@ def write(data_images: Iterable[DataImage], img_path: str, lbl_path: str, n_imag
                 for label in data_image.labels:
                     size, _ = data_image.img.size
                     assert size == _
-                    cx = (label.x + label.w / 2) / size
-                    cy = (label.y + label.h / 2) / size
-                    f.write(f'{label.c} {cx} {cy} {label.w} {label.h}' + '\n')
+                    cx = label.x + label.w / 2
+                    cy = label.y + label.h / 2
+                    f.write(f'{label.c} {cx / size} {cy / size} {label.w / size} {label.h / size}' + '\n')
 
             i += 1
 
