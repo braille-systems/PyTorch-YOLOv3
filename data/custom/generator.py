@@ -12,6 +12,7 @@ from typing import List, Generator, Iterable, Dict
 
 import wget
 from PIL import Image
+from torchvision.transforms import ColorJitter, RandomPerspective
 
 Img = Image.Image
 TRANSPARENT = (255, 255, 255, 0)
@@ -74,8 +75,8 @@ def read_tiles(folder: str, name_to_i_class: Dict[str, int]) -> GenTiles:
 
 
 def apply_rotations(tiles: Iterable[Tile], angles: List[int]) -> GenTiles:
-    for tile, angle in zip(tiles, itertools.cycle(angles)):
-        yield from apply_rotations_helper(tile, angle)
+    for tile in tiles:
+        yield from apply_rotations_helper(tile, random.choice(angles))
 
 
 def apply_rotations_helper(tile: Tile, angle: int) -> GenTiles:
@@ -86,8 +87,8 @@ def apply_rotations_helper(tile: Tile, angle: int) -> GenTiles:
 
 
 def apply_resize(tiles: Iterable[Tile], sizes: List[int]) -> GenTiles:
-    for tile, size in zip(tiles, itertools.cycle(sizes)):
-        yield from apply_resize_helper(tile, size)
+    for tile in tiles:
+        yield from apply_resize_helper(tile, random.choice(sizes))
 
 
 def apply_resize_helper(tile: Tile, size: int) -> GenTiles:
@@ -105,15 +106,22 @@ def apply_resize_helper(tile: Tile, size: int) -> GenTiles:
     yield Tile(square.resize((size, size)), label)
 
 
-def apply_perspective(tiles: Iterable[Tile]) -> GenTiles:
-    yield from tiles  # TODO
+def apply_perspective(tiles: Iterable[Tile], rp: RandomPerspective) -> GenTiles:
+    for tile in tiles:
+        img = rp(tile.img)
+        w, h = img.size
+        yield Tile(img, Label(x=0, y=0, w=w, h=h, c=tile.label.c))
+
+
+def apply_color_jitter(dis: Iterable[DataImage], cj: ColorJitter) -> Generator[DataImage, None, None]:
+    yield from (DataImage(cj(di.img), di.labels) for di in dis)
 
 
 def place_fragments_on_bg(
         tiles: Iterable[Tile], bg_path: str, *,
         n_fragments_lo: int, n_fragments_hi: int, img_size: int
 ) -> Generator[DataImage, None, None]:
-    for filename in (f for f in os.listdir(bg_path)
+    for filename in (f for f in itertools.cycle(os.listdir(bg_path))
                      if os.path.isfile(os.path.join(bg_path, f))):
         n_fragments = random.randrange(n_fragments_lo, n_fragments_hi)
         background = Image.open(os.path.join(bg_path, filename))
@@ -180,19 +188,20 @@ def write(data_images: Iterable[DataImage], img_path: str, lbl_path: str, n_imag
     os.makedirs(img_path, exist_ok=True)
     os.makedirs(lbl_path, exist_ok=True)
     i = 0
-    while i < n_images:
-        for data_image in data_images:
-            print(f'Image: {i} of {n_images}')
-            data_image.img.save(os.path.join(img_path, f'{i}.png'))
-            with open(os.path.join(lbl_path, f'{i}.txt'), 'w') as f:
-                for label in data_image.labels:
-                    size, _ = data_image.img.size
-                    assert size == _
-                    cx = label.x + label.w / 2
-                    cy = label.y + label.h / 2
-                    f.write(f'{label.c} {cx / size} {cy / size} {label.w / size} {label.h / size}' + '\n')
+    for data_image in data_images:
+        print(f'Image: {i} of {n_images}')
+        data_image.img.save(os.path.join(img_path, f'{i}.png'))
+        with open(os.path.join(lbl_path, f'{i}.txt'), 'w') as f:
+            for label in data_image.labels:
+                size, _ = data_image.img.size
+                assert size == _
+                cx = label.x + label.w / 2
+                cy = label.y + label.h / 2
+                f.write(f'{label.c} {cx / size} {cy / size} {label.w / size} {label.h / size}' + '\n')
 
-            i += 1
+        i += 1
+        if i >= n_images:
+            break
 
 
 def write_annotations(folder: str, train_path: str, valid_path: str, n_train: int, n_valid: int) -> None:
@@ -207,13 +216,13 @@ def write_annotations(folder: str, train_path: str, valid_path: str, n_train: in
 
 def main() -> None:
     size = 500
-    n_images = 5000
-    fragment_sizes = [100, 120, 150, 180, 190, 200]
-    angles = [5, 6, 7, 8, 10, 15, 16, 17, 20, 25, 30]
+    n_images = 15000
+    fragment_sizes = [30, 40, 45, 48, 50, 55, 70, 71, 72, 75, 90, 100, 120, 140, 160, 200]
+    angles = [5, 6, 7, 8, 10, 15, 16, 17, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100]
     bg_url = 'http://images.cocodataset.org/zips/val2017.zip'
     n_fragments_lo = 3
     n_fragments_hi = 15
-    valid = 0.2
+    valid = 0.05
 
     tiles_folder = os.path.join('raw')
     bg_folder = os.path.join('background', 'val2017')
@@ -227,13 +236,17 @@ def main() -> None:
     tiles = read_tiles(tiles_folder, name_to_i_class)
     tiles = apply_rotations(tiles, angles)
     tiles = apply_resize(tiles, fragment_sizes)
-    tiles = apply_perspective(tiles)
+    tiles = apply_perspective(tiles, RandomPerspective(distortion_scale=0.7, p=0.8))
 
     data_images = place_fragments_on_bg(
         tiles, bg_folder,
         n_fragments_lo=n_fragments_lo,
         n_fragments_hi=n_fragments_hi,
         img_size=size)
+    data_images = apply_color_jitter(
+        data_images,
+        ColorJitter(brightness=0.6, contrast=0.8, saturation=0.8, hue=0.3)
+    )
     write(data_images, res_images_path, res_labels_path, n_images)
 
     write_annotations(
@@ -247,3 +260,5 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+else:
+    raise Exception('I am MAIN')

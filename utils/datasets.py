@@ -122,8 +122,6 @@ class ListDataset(Dataset):
             targets = torch.zeros((len(boxes), 6))
             targets[:, 1:] = boxes
 
-        # TODO Apply augmentations
-
         return img_path, img, targets
 
     def collate_fn(self, batch):

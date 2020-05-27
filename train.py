@@ -85,6 +85,8 @@ if __name__ == "__main__":
         "conf_noobj",
     ]
 
+    losses = []
+
     for epoch in range(opt.epochs):
         model.train()
         start_time = time.time()
@@ -96,6 +98,8 @@ if __name__ == "__main__":
 
             loss, outputs = model(imgs, targets)
             loss.backward()
+
+            losses.append(loss.detach().item())
 
             if batches_done % opt.gradient_accumulations:
                 # Accumulates gradient before each step
@@ -139,6 +143,9 @@ if __name__ == "__main__":
 
             model.seen += imgs.size(0)
 
+        if epoch % opt.checkpoint_interval == 0:
+            torch.save(model.state_dict(), f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
+
         if epoch % opt.evaluation_interval == 0:
             print("\n---- Evaluating Model ----")
             # Evaluate the model on the validation set
@@ -164,6 +171,10 @@ if __name__ == "__main__":
                 ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
             print(AsciiTable(ap_table).table)
             print(f"---- mAP {AP.mean()}")
-
-        if epoch % opt.checkpoint_interval == 0:
-            torch.save(model.state_dict(), f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
+            with open(os.path.join('checkpoints', f'{epoch}.txt'), 'w') as f:
+                f.write(AsciiTable(ap_table).table)
+                f.write(f"\n---- mAP {AP.mean()}\n\n")
+            # with open(os.path.join('checkpoints', f'precision.txt'), 'a') as f:
+            #     f.write(f'{precision.mean()}\n')
+            # with open(os.path.join('checkpoints', f'loss.txt'), 'w') as f:
+            #     f.write('\n'.join(losses[600:]))
